@@ -35,7 +35,7 @@ impl MemTable {
                         let mut buffer: Vec<u8> = vec![];
                         file_handle.read_to_end(&mut buffer);
                         let index = bincode::deserialize::<BTreeMap<String, Values>>(&buffer).expect("The file exists at the persistence path, but seems to be corrupt - bincode cannot read it. Aborting...");
-
+                        
                         return Self {
                             count: index.len(),
                             capacity: capacity,
@@ -48,8 +48,8 @@ impl MemTable {
                         // No file was found in the persistence path location. Create an in-memory index and return it as in below 'else' arm.
                         return Self {
                             count: 0,
-                            persistence: false,
-                            persistence_path: None,
+                            persistence: true,
+                            persistence_path: Some(persistence_path),
                             capacity,
                             index: BTreeMap::new()
                         };
@@ -70,15 +70,19 @@ impl MemTable {
     }
 
     pub fn insert(&mut self, key: String, value: &Values) -> Result<(), String> {
-        if self.count == self.capacity {
+        if self.count == self.capacity && !self.persistence{
+            return Err(String::from("Could not write to memtable. Already full."));
+        } else if self.persistence && self.count == self.capacity {
             match self.dump() {
-                Ok(_) => {},
+                Ok(_) => {
+
+                },
                 Err(_) => {
                     return Err(String::from("Could not dump to disk. Quitting."));
                 }
             };
-            return Err(String::from("Could not write to memtable. Already full."));
-        } else {
+        } 
+        else {
             // Write to internal cache. 
             self.index.insert(key, value.clone());
             self.count += 1;
