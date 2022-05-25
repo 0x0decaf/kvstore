@@ -33,7 +33,7 @@ impl MemTable {
 
                         // Load from persistence path into index, and return self. 
                         let mut buffer: Vec<u8> = vec![];
-                        file_handle.read_to_end(&mut buffer);
+                        file_handle.read_to_end(&mut buffer).expect("Could not read existing persistence buffer on disk.");
                         let index = bincode::deserialize::<BTreeMap<String, Values>>(&buffer).expect("The file exists at the persistence path, but seems to be corrupt - bincode cannot read it. Aborting...");
                         
                         return Self {

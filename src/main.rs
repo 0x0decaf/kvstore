@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-use std::error::Error;
-use std::fs::File;
-use std::io::{Read, Write};
+// use std::collections::BTreeMap;
+// use std::error::Error;
+// use std::fs::File;
+// use std::io::{Read, Write};
 
 use serde::{Serialize, Deserialize};
 
@@ -15,45 +15,98 @@ enum Values {
     BOOL(bool),
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main(){
+    let mut cache = memtable::MemTable::with_capacity(usize::MAX, Some(String::from("./test_memory")));
 
-    // let mut file_handle = File::create("./dumped").expect("Error opening dumped file.");
-    // let mut index = BTreeMap::<String, Values>::new();
-    // index.insert("Hello".to_string(), Values::INT(32));
-    // index.insert("Alpha".to_string(), Values::FLOAT(5.9967));
-    // index.insert(
-    //     "Balloon".to_string(),
-    //     Values::STRING(String::from("Something tells me this is a long motherfucking string. Still test?")),
-    // );
+    loop {
+        let command_stdin = std::io::stdin();
+        let mut command_buffer = String::new();
+        command_stdin.read_line(&mut command_buffer).expect("Error reading from stdin. Crashing...");
+        
+        match command_buffer.as_str() {
+            "exit" | "EXIT" => {
+                break;
+            },
+            _ => {
+                // Try to parse the command. 
+                // command can take the following forms: 
+                /*
+                    set x integer 10
+                    set y bool 5
+                    set z string How YOU doin?
+                    get x
+                    get z
+                    flush <- this writes to disk.
+                */
 
-    // index.insert("booleantest".to_string(), Values::BOOL(false));
+                let iterator = command_buffer.split_once(' ');
+                match iterator {
+                    Some(optional_split) => {
+                        let command = optional_split.0;
 
-    // let serialized_data = bincode::serialize::<BTreeMap<String, Values>>(&index)?;
-    // file_handle.write(&serialized_data).expect("Error in writing serialized data to file.");
+                        match command.to_ascii_lowercase().as_str() {
+                            "set" => {
+                                let mut iterator = optional_split.1.split(' ');
+                                let variable_name = iterator.next().unwrap();
+                                let variable_type = iterator.next();
+                                // now parse the variable and check to see what kind it is. If int or float, then parse the thing, otherwise, just parse the string and check what kind of memtable::Values to generate from this. 
 
-    // // Now read from the same file and try to deserialize into proper structures.
+                                match variable_type {
+                                    Some("integer") => {
+                                        let variable_value = iterator.next();
+                                        let parsed_int = variable_value.expect("Error getting\
+                                                                                         integer value from iterator.")                      .parse::<i32>()
+                                                                .expect("Error parsing integer value. Is this valid? ");
 
-    // file_handle.flush()?;
-    // let mut file_handle = File::open("./dumped").expect("Error while opening written bincode file.");
+                                        // Construct a value and push it into the index. 
+                                        let value = memtable::Values::INT(parsed_int);
+                                        cache.insert(variable_name.to_owned(), &value).expect(format!("Error inserting {}, {:?} into the cache.", variable_name, value).as_str());
+                                    },
+                                    Some("float") => {
+                                        let variable_value = iterator.next();
+                                        let parsed_int = variable_value.expect("Error getting\
+                                                                                         integer value from iterator.")                      .parse::<f64>()
+                                                                .expect("Error parsing integer value. Is this valid? ");
 
-    // let converted_from_memory = bincode::deserialize::<BTreeMap<String, Values>>(&serialized_data).expect
-    // ("Memory recovery failed.");
+                                        // Construct a value and push it into the index. 
+                                        let value = memtable::Values::FLOAT(parsed_int);
+                                        cache.insert(variable_name.to_owned(), &value).expect(format!("Error inserting {}, {:?} into the cache.", variable_name, value).as_str());
+                                    },
+                                    Some("string") => {
+                                        // This is tricky. TODO::
+                                    },
+                                    Some("bool") => {
+                                        let variable_name = iterator.next().expect("Could not get variable name");
+                                        let criteria = iterator.next().expect("Could not get boolean value from the command");
 
-    // for entry in converted_from_memory {
-    //     println!("Entry deserialized: {} is {:?}", entry.0, entry.1); 
-    // }
+                                        let value = match criteria.to_ascii_lowercase().as_str() {
+                                            "true" => { memtable::Values::BOOL(true) },
+                                            "false" => { memtable::Values::BOOL(false) },
+                                            _ => {
+                                                panic!("not a boolean value passed. Pass either `true` or `false`");
+                                            }
+                                        };
 
-    // let mut readbuffer: Vec<u8> = vec![];
-    // let count = file_handle.read_to_end(&mut readbuffer).expect("Error while reading file the second time.");
-    // println!("Read {} bytes from file.", count);
-    // let converted = match bincode::deserialize::<BTreeMap<String, Values>>(&readbuffer) {
-    //     Ok(converted) => converted,
-    //     Err(err) => panic!("Error in deserialization:: {:?}", err)
-    // };
-    
-    // for entry in converted {
-    //     println!("Size of entry in memory: {}", std::mem::size_of::<(String, Values)>());
-    //     println!("Entry deserialized: {} is {:?}", entry.0, entry.1);
-    // }
-    Ok(())
+                                        cache.insert(variable_name.to_owned(), &value).expect("Could not write boolean value to the cache");
+                                    },
+                                    _ => {
+                                        panic!("Unknown type of variable.")
+                                    }
+                                }
+
+                            },
+                            "get" => {},
+                            "flush" => {},
+                            _ => {
+                                panic!("Unknown command");
+                            }
+                        };
+                    },
+                    None => {
+                        panic!("Invalid command passed!")
+                    }
+                }
+            }
+        }
+    }
 }
